@@ -3,10 +3,8 @@ services:
   web:
     build: .
     ports:
-      - "5000:5000"
+      - "6379:6379"
     volumes:
       - .:/src
-    environment:
-      FLASK_ENV: development
   redis:
-    image: "redis:alpine"
+    image: "redislabs/redismod"

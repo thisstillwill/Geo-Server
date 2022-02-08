@@ -9,4 +9,4 @@ services:
     depends_on:
       - redis
   redis:
-    image: "redislabs/redismod"
+    image: "redis:alpine"

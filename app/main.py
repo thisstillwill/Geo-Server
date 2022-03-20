@@ -31,9 +31,9 @@ async def add_point(request: Request, status_code=201):
 
 # Return a list of points within a radius of the given location
 @app.get("/points")
-async def get_points(latitude: float, longitude: float, status_code=200):
+async def get_points(latitude: float, longitude: float, radius: float, status_code=200):
     # Find which points are within the search radius
-    point_keys = await redis.georadius("points", longitude, latitude, SEARCH_RADIUS_METERS, unit="m")
+    point_keys = await redis.georadius("points", longitude, latitude, radius, unit="m")
 
     # Create an array of points to return
     points = []

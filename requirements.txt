@@ -3,3 +3,5 @@ uvicorn
 aioredis
 hiredis
 ulid-py
+pyjwt[crypto]
+httpx

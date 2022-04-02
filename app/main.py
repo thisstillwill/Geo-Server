@@ -1,3 +1,4 @@
+from urllib import request
 from fastapi import Depends, HTTPException, status, FastAPI
 from starlette.requests import Request
 from starlette.responses import Response
@@ -47,32 +48,36 @@ async def _fetch_apple_public_key(kid: str):
     return public_key
 
 # Verify a user's token from Sign in with Apple
-async def verify_identity_token(request: Request) -> bool:
+async def verify_identity_token(request: Request):
     identity_token = request.headers["Authorization"]
     token_header = jwt.get_unverified_header(request.headers["Authorization"])
     kid = token_header["kid"]
     public_key = await _fetch_apple_public_key(kid)
     try:
-        jwt.decode(identity_token, public_key, issuer=APPLE_ISSUER, audience=APPLE_APP_ID, algorithms=["RS256"])
+        decoded_token = jwt.decode(identity_token, public_key, issuer=APPLE_ISSUER, audience=APPLE_APP_ID, algorithms=["RS256"])
+        sub = decoded_token["sub"]
+        user_id = (await request.json())["id"]
+        if sub != user_id:
+            print("User ID does not match token subject!")
+            raise credentials_exception
         print("Verified identity token!")
-        return True
     except jwt.exceptions.ExpiredSignatureError as e:
         print("Identity token has expired!")
-        return False
+        raise credentials_exception
     except jwt.exceptions.InvalidAudienceError as e:
         print("Identity token's audience did not match!")
-        return False
+        raise credentials_exception
     except Exception as e:
         print(e)
-        return False
+        raise credentials_exception
 
 # Register a new user
-@app.post("/users")
-async def sign_up(request: Request, verified_identity_token = Depends(verify_identity_token)):
-    if not verified_identity_token:
-         raise credentials_exception
+@app.post("/users", dependencies=[Depends(verify_identity_token)])
+async def sign_up(request: Request):
     user = await request.json()
-    print(user)
+    
+    # Store user as hash using id as the key
+    # await redis.hset(user["id"], mapping=user)
 
 # Add a new point from a client
 @app.post("/points")

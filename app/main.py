@@ -22,10 +22,15 @@ APPLE_APP_ID = "com.williamsvoboda.Geo"
 APPLE_ISSUER = "https://appleid.apple.com"
 
 credentials_exception = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
+    status_code=401,
     detail="Could not validate credentials",
     headers={"WWW-Authenticate": "Bearer"},
-    )
+)
+
+user_missing_exception = HTTPException(
+    status_code=404,
+    detail="User not found in database",
+)
 
 app = FastAPI()
 redis = aioredis.from_url(REDIS_URL, decode_responses=True)
@@ -71,13 +76,25 @@ async def verify_identity_token(request: Request):
         print(e)
         raise credentials_exception
 
+# Verify a user exists in the database
+async def verify_user_exists(request: Request):
+    if not await redis.exists((await request.json())["id"]):
+        raise user_missing_exception
+
 # Register a new user
 @app.post("/users", dependencies=[Depends(verify_identity_token)])
 async def sign_up(request: Request):
     user = await request.json()
+    print("Signed up!")
+    print(user)
     
     # Store user as hash using id as the key
     # await redis.hset(user["id"], mapping=user)
+
+# Verify a returning user
+@app.post("/auth", dependencies=[Depends(verify_identity_token), Depends(verify_user_exists)])
+async def sign_in(request: Request):
+    print("Signed in!")
 
 # Add a new point from a client
 @app.post("/points")

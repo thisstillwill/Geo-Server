@@ -1,3 +1,4 @@
+from ast import Str
 from urllib import request
 from fastapi import Depends, HTTPException, status, FastAPI
 from starlette.requests import Request
@@ -13,13 +14,17 @@ import httpx
 REDIS_URL: str = "redis://redis:6379"
 EXPIRE_TIME_HOURS: int = 24
 
+APPLE_APP_ID = "com.williamsvoboda.Geo"
+APPLE_ISSUER = "https://appleid.apple.com"
 APPLE_PUBLIC_KEYS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_PUBLIC_KEYS = None
 APPLE_KEY_CACHE_EXP = 60 * 60 * 24
 APPLE_LAST_KEY_FETCH = 0
 
-APPLE_APP_ID = "com.williamsvoboda.Geo"
-APPLE_ISSUER = "https://appleid.apple.com"
+APP_ISSUER = "geo-apiserver"
+with open("app/AuthKey_MUCTYQ2J25.p8", "r") as keyfile:
+    APP_SECRET_KEY = keyfile.read()
+APP_SECRET_KEY_ID = "MUCTYQ2J25"
 
 credentials_exception = HTTPException(
     status_code=401,
@@ -81,20 +86,33 @@ async def verify_user_exists(request: Request):
     if not await redis.exists((await request.json())["id"]):
         raise user_missing_exception
 
+# Generate a refresh token for verified users
+async def generate_refresh_token(sub: str) -> str:
+    iss = APP_ISSUER
+    aud = APPLE_APP_ID
+    iat = round(datetime.now().timestamp())
+    exp = round((datetime.now() + timedelta(weeks=4)).timestamp())
+    kid = APP_SECRET_KEY_ID
+    refresh_token = jwt.encode({"iss": iss, "aud": aud, "exp": exp, "iat": iat, "sub": sub}, APP_SECRET_KEY, algorithm="ES256", headers={"kid": kid, "alg": "ES256"})
+    return refresh_token
+
 # Register a new user
 @app.post("/users", dependencies=[Depends(verify_identity_token)])
 async def sign_up(request: Request):
     user = await request.json()
     print("Signed up!")
-    print(user)
+    print("Returning refresh token!")
+    return {"token": await generate_refresh_token(user["id"])}
     
     # Store user as hash using id as the key
     # await redis.hset(user["id"], mapping=user)
 
 # Verify a returning user
-@app.post("/auth", dependencies=[Depends(verify_identity_token), Depends(verify_user_exists)])
+@app.post("/auth", dependencies=[Depends(verify_user_exists), Depends(verify_identity_token)])
 async def sign_in(request: Request):
     print("Signed in!")
+    print("Returning refresh token!")
+    return {"token": await generate_refresh_token((await request.json())["id"])}
 
 # Add a new point from a client
 @app.post("/points")

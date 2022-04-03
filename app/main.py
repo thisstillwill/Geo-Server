@@ -23,8 +23,8 @@ APPLE_LAST_KEY_FETCH = 0
 
 APP_ISSUER = "geo-apiserver"
 with open("app/AuthKey_MUCTYQ2J25.p8", "r") as keyfile:
-    APP_SECRET_KEY = keyfile.read()
-APP_SECRET_KEY_ID = "MUCTYQ2J25"
+    APP_KEY = keyfile.read()
+APP_KEY_ID = "MUCTYQ2J25"
 
 credentials_exception = HTTPException(
     status_code=401,
@@ -92,9 +92,30 @@ async def generate_refresh_token(sub: str) -> str:
     aud = APPLE_APP_ID
     iat = round(datetime.now().timestamp())
     exp = round((datetime.now() + timedelta(weeks=4)).timestamp())
-    kid = APP_SECRET_KEY_ID
-    refresh_token = jwt.encode({"iss": iss, "aud": aud, "exp": exp, "iat": iat, "sub": sub}, APP_SECRET_KEY, algorithm="ES256", headers={"kid": kid, "alg": "ES256"})
+    kid = APP_KEY_ID
+    refresh_token = jwt.encode({"iss": iss, "aud": aud, "exp": exp, "iat": iat, "sub": sub}, APP_KEY, algorithm="HS256", headers={"kid": kid, "alg": "HS256"})
     return refresh_token
+
+# Verify a user's refresh token
+async def verify_refresh_token(request: Request):
+    refresh_token = request.headers["Authorization"]
+    try:
+        decoded_token = jwt.decode(refresh_token, APP_KEY, issuer=APP_ISSUER, audience=APPLE_APP_ID, algorithms=["HS256"])
+        sub = decoded_token["sub"]
+        user_id = (await request.json())["id"]
+        if sub != user_id:
+            print("User ID does not match token subject!")
+            raise credentials_exception
+        print("Verified refresh token!")
+    except jwt.exceptions.ExpiredSignatureError as e:
+        print("Refresh token has expired!")
+        raise credentials_exception
+    except jwt.exceptions.InvalidAudienceError as e:
+        print("Refresh token's audience did not match!")
+        raise credentials_exception
+    except Exception as e:
+        print(e)
+        raise credentials_exception
 
 # Register a new user
 @app.post("/users", dependencies=[Depends(verify_identity_token)])
@@ -107,12 +128,17 @@ async def sign_up(request: Request):
     # Store user as hash using id as the key
     # await redis.hset(user["id"], mapping=user)
 
-# Verify a returning user
+# Verify a returning user and start a new session
 @app.post("/auth", dependencies=[Depends(verify_user_exists), Depends(verify_identity_token)])
 async def sign_in(request: Request):
     print("Signed in!")
     print("Returning refresh token!")
     return {"token": await generate_refresh_token((await request.json())["id"])}
+
+# Verify a returning user's session
+@app.post("/session", dependencies=[Depends(verify_refresh_token)])
+async def sign_in():
+    print("Verified previous session!")
 
 # Add a new point from a client
 @app.post("/points")

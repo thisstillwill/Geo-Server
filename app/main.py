@@ -120,23 +120,30 @@ async def verify_refresh_token(request: Request):
 # Register a new user
 @app.post("/users", dependencies=[Depends(verify_identity_token)])
 async def sign_up(request: Request):
+    # Store user as hash using id as the key
     user = await request.json()
+    await redis.hset(user["id"], mapping=user)
     print("Signed up!")
     print("Returning refresh token!")
     return {"token": await generate_refresh_token(user["id"])}
     
-    # Store user as hash using id as the key
-    # await redis.hset(user["id"], mapping=user)
-
 # Verify a returning user and start a new session
 @app.post("/auth", dependencies=[Depends(verify_user_exists), Depends(verify_identity_token)])
 async def sign_in(request: Request):
     print("Signed in!")
+    # print("Returning user and refresh token!")
+    # response = {}
+    # user_id = (await request.json())["id"]
+    # user = await redis.hgetall(user_id)
+    # response.update({"user": user})
+    # response.update({"token": {"token": await generate_refresh_token(user_id)}})
+    # print(response)
+    # return response
     print("Returning refresh token!")
     return {"token": await generate_refresh_token((await request.json())["id"])}
 
 # Verify a returning user's session
-@app.post("/session", dependencies=[Depends(verify_refresh_token)])
+@app.post("/session", dependencies=[Depends(verify_user_exists), Depends(verify_refresh_token)])
 async def sign_in():
     print("Verified previous session!")
 

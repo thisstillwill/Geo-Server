@@ -98,6 +98,7 @@ async def generate_refresh_token(sub: str) -> str:
 
 # Verify a user's refresh token
 async def verify_refresh_token(request: Request):
+    # raise credentials_exception
     refresh_token = request.headers["Authorization"]
     try:
         jwt.decode(refresh_token, APP_KEY, issuer=APP_ISSUER, audience=APPLE_APP_ID, algorithms=["HS256"])
@@ -145,7 +146,7 @@ async def sign_in(request: Request):
     return await redis.hgetall(user_id)
 
 # Add a new point from a client
-@app.post("/points")
+@app.post("/points", dependencies=[Depends(verify_refresh_token)])
 async def add_point(request: Request):
     # Process JSON and create identifier
     point = await request.json()
@@ -162,7 +163,7 @@ async def add_point(request: Request):
     await redis.geoadd("points", point["longitude"], point["latitude"], point["id"])
 
 # Return a list of points within a radius of the given location
-@app.get("/points")
+@app.get("/points", dependencies=[Depends(verify_refresh_token)])
 async def get_points(latitude: float, longitude: float, radius: float, status_code=200):
     # Find which points are within the search radius
     point_keys = await redis.georadius("points", longitude, latitude, radius, unit="m")

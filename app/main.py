@@ -151,7 +151,7 @@ async def sign_in(request: Request):
 
 # Add a new point from a client
 @app.post("/points")
-async def add_point(request: Request, status_code=201):
+async def add_point(request: Request):
     # Process JSON and create identifier
     point = await request.json()
     point["id"] = ulid.new().str

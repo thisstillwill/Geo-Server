@@ -100,12 +100,7 @@ async def generate_refresh_token(sub: str) -> str:
 async def verify_refresh_token(request: Request):
     refresh_token = request.headers["Authorization"]
     try:
-        decoded_token = jwt.decode(refresh_token, APP_KEY, issuer=APP_ISSUER, audience=APPLE_APP_ID, algorithms=["HS256"])
-        sub = decoded_token["sub"]
-        user_id = (await request.json())["id"]
-        if sub != user_id:
-            print("User ID does not match token subject!")
-            raise credentials_exception
+        jwt.decode(refresh_token, APP_KEY, issuer=APP_ISSUER, audience=APPLE_APP_ID, algorithms=["HS256"])
         print("Verified refresh token!")
     except jwt.exceptions.ExpiredSignatureError as e:
         print("Refresh token has expired!")

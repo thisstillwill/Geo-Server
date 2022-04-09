@@ -1,5 +1,3 @@
-from ast import Str
-from urllib import request
 from fastapi import Depends, HTTPException, status, FastAPI
 from starlette.requests import Request
 from starlette.responses import Response
@@ -26,21 +24,23 @@ with open("app/AuthKey_MUCTYQ2J25.p8", "r") as keyfile:
     APP_KEY = keyfile.read()
 APP_KEY_ID = "MUCTYQ2J25"
 
+# Custom exceptions
 credentials_exception = HTTPException(
     status_code=401,
     detail="Could not validate credentials",
     headers={"WWW-Authenticate": "Bearer"},
 )
-
 user_missing_exception = HTTPException(
     status_code=404,
     detail="User not found in database",
 )
 
+# Initialize application and connect to redis
 app = FastAPI()
 redis = aioredis.from_url(REDIS_URL, decode_responses=True)
 
 # Find the matching Apple public key given its kid
+# Adapted from https://gist.github.com/davidhariri/b053787aabc9a8a9cc0893244e1549fe
 async def _fetch_apple_public_key(kid: str):
     # Check to see if the public key is unset or is stale before returning
     global APPLE_LAST_KEY_FETCH
@@ -134,8 +134,6 @@ async def sign_in(request: Request):
     response.update({"user": user})
     response.update({"token": {"token": await generate_refresh_token(user_id)}})
     return response
-    # print("Returning refresh token!")
-    # return {"token": await generate_refresh_token((await request.json())["id"])}
 
 # Verify a returning user's session
 @app.post("/session", dependencies=[Depends(verify_user_exists), Depends(verify_refresh_token)])
@@ -151,14 +149,11 @@ async def add_point(request: Request):
     # Process JSON and create identifier
     point = await request.json()
     point["id"] = ulid.new().str
-
     # Store point as hash using id as the key
     await redis.hset(point["id"], mapping=point)
-
     # Set expire time
     expire_time = datetime.now() + timedelta(hours=EXPIRE_TIME_HOURS)
     await redis.expireat(point["id"], expire_time)
-
     # Register point as geospatial item to Redis using id as name
     await redis.geoadd("points", point["longitude"], point["latitude"], point["id"])
 
@@ -167,13 +162,10 @@ async def add_point(request: Request):
 async def get_points(latitude: float, longitude: float, radius: float, status_code=200):
     # Find which points are within the search radius
     point_keys = await redis.georadius("points", longitude, latitude, radius, unit="m")
-
     # Create an array of points to return
     points = []
-
     # Add  each point's corresponding information to the dictionary
     for point_key in point_keys:
-
         # Remove the key from the sorted set if it has already expired
         if not await redis.exists(point_key):
             print("This key has expired! Deleting from sorted set...")

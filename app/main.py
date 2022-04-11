@@ -62,7 +62,14 @@ async def verify_identity_token(request: Request):
     identity_token = request.headers["Authorization"]
     token_header = jwt.get_unverified_header(request.headers["Authorization"])
     kid = token_header["kid"]
-    public_key = await _fetch_apple_public_key(kid)
+    try:
+        public_key = await _fetch_apple_public_key(kid)
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code = 500,
+            detail="Could not validate credentials",
+        )
     try:
         decoded_token = jwt.decode(identity_token, public_key, issuer=APPLE_ISSUER, audience=APPLE_APP_ID, algorithms=["RS256"])
         sub = decoded_token["sub"]
